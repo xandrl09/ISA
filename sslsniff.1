@@ -1,0 +1,35 @@
+.TH SSLSNIFF 1
+.SH 
+SSL sniffer \- Monitoring of SSL connections 
+.SH SYNOPSIS
+.B ./sslsniff
+[\fB\-r\fR \ file\fR]
+[\fB\-i\fR \interface\fR]
+.SH DESCRIPTION
+.B sslsniff
+prints informations about TLS connection.
+.SH OPTIONS
+
+\-r file:
+Name of input file
+
+\-i interface:
+Name of interface
+
+.SH STARTUP EXAMPLE
+
+ ./sslsniff -r soubor.pcapng
+
+ ./sslsniff -i enp0s3
+
+.SH LIMITATIONS
+program doesnt support IPv6
+
+.SH SUBMITED FILLES
+sslsniffer.cpp
+Makefile
+sslsniff.1
+manual.pdf
+
+
+
