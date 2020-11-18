@@ -24,6 +24,8 @@
 
 using namespace std;
 
+#define _FAVOR_BSD
+
 // globalni konstanty
 #define PROMISCOUS 1
 #define EHL 14 // Ethernet Header Length
