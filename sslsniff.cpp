@@ -24,7 +24,6 @@
 
 using namespace std;
 
-#define _FAVOR_BSD
 
 // globalni konstanty
 #define PROMISCOUS 1
@@ -61,7 +60,10 @@ string server_name;
  */
 void help()
 {
-	cerr << "Run the program with arguments -i or -r." << endl;
+	cerr << "Run the program with arguments -i or -r." << endl
+	<< "Example of running the program:" << endl
+	<< "./sslsniff -r soubor.pcapng" << endl
+	<< "./sslsniff -i enp0s3" << endl;
 }
 
 
@@ -77,7 +79,7 @@ void error_help()
 
 /*
  * Funkce kontroluje parametry programu.
- * V pripade spravnych parametru preda informace o nich do mainu.
+ * V pripade spravnych parametru preda Sinformace o nich do mainu.
  * V pripade spatnych parametru vypise napovedu.  
  */
 int check_params(int argc, char *argv[])
@@ -116,41 +118,29 @@ int check_params(int argc, char *argv[])
 }
 
 /*
- *
- *
- *
- *
+ * Funkce prochazi paket, analyzuje v nem ulozena data a vypisuje je na standartni vystup.
  */
-void my_packet_handler(u_char *args, const struct pcap_pkthdr *header, const u_char *packet)
+void p_handler(u_char *args, const struct pcap_pkthdr *header, const u_char *packet)
 {
-
 	// ukazatele na hlavicky
 	const u_char *ip_header;
 	const u_char *tcp_header;
 	const u_char *payload;
 
+	// velikosti hlavicek
 	int ethernet_header_length = EHL;// pevne dana velikost ethernetove hlavicky
 	int ip_header_length;
 	int tcp_header_length;
-
 
 	// IP hlavicka
 	ip_header = packet + ethernet_header_length;
 	struct ip *iph;
 	iph = (struct ip *) ip_header;
-
-
 	//delka ip hlavicky
 	ip_header_length = ((*ip_header) & 0x0F);
 	ip_header_length = ip_header_length *4;
-
-
-	//u_char protocol = *(ip_header + 9);
 	
-
 	// TCP hlavicka
-
-
 	tcp_header = packet + ethernet_header_length + ip_header_length;
 	struct tcphdr *tcp;
 	tcp = (struct tcphdr *) tcp_header;
@@ -198,23 +188,15 @@ void my_packet_handler(u_char *args, const struct pcap_pkthdr *header, const u_c
 		port_used = true;
 	}
 
-
 	// delka tcp hlavicky ulozena na polovine byte -> & 0xF0) >> 4;
 	tcp_header_length = ((*(tcp_header + 12)) & 0xF0) >> 4;
 	tcp_header_length = tcp_header_length *4;
 
-
 	//SSL hlavicka
-
-
-
-	int total_headers_size = ethernet_header_length + ip_header_length 
+	int ssl_hl = ethernet_header_length + ip_header_length 
 	+ tcp_header_length;
 	
-	payload = packet + total_headers_size;
-
-
-
+	payload = packet + ssl_hl;
 
 	if(*payload == 0x16 && clients_hello == false) // client hello zprava
 	{
@@ -222,42 +204,26 @@ void my_packet_handler(u_char *args, const struct pcap_pkthdr *header, const u_c
 
 		payload = payload + 43;
 		int sesid = *payload; //sesion id
-		//cout << sesid << endl;
-
 		payload = payload + sesid + 2;
 		int cip = *payload;// cipher suite lenght
-		//cout << cip << endl;
-
 		payload = payload + cip + 14;
 		int naml = *payload; //name lenght
-		//cout << naml << endl;
-
-
 		char sni [naml];
 		memccpy(sni, payload, naml+4,  naml+4);
-		//cout << sni << endl;
-		server_name = sni;
+		server_name = sni; // Server NAme Identification
 	}
-
-
-
 	
 	while(*payload == 0x14 || *payload == 0x15 ||
 	 *payload == 0x16 || *payload == 0x17  )// zpracuje vsechny: application data protocol
 	{
 		int ssl =  *(payload + 4) ;
 		ssl = ssl + (*(payload + 3) * 255);
-		
-		
+				
 		ssl_data = ssl_data  + ssl;
 
-		//cout << ssl_data << endl;
-
 		payload = payload + ssl  + 5;
-
 	}
 	
-
 
 	if(tcp->fin && number_of_fins < 2 && clients_hello == true) // paket ma priznak fin
 	{
@@ -286,17 +252,13 @@ void my_packet_handler(u_char *args, const struct pcap_pkthdr *header, const u_c
 
 /*
  * Hlavni funkce programu.
- *
- *
- *
- *
+ * Postupne vola dalsi.
  */
 int main(int argc, char **argv)
 {
 	char error_buffer[PCAP_ERRBUF_SIZE];
 	pcap_t *handle;
-	int timeout_limit = SIXMIN;
-	int snapshot_len = 1024;
+	int s_len = 1024; // delka snapshotu
 	u_char *my_arguments = NULL;
 
 
@@ -304,7 +266,7 @@ int main(int argc, char **argv)
 
 	if (vysledek == 1) // sitovi provoz
 	{
-		handle = pcap_open_live(device, snapshot_len, PROMISCOUS, timeout_limit, error_buffer);
+		handle = pcap_open_live(device, s_len, PROMISCOUS, SIXMIN, error_buffer);
 		if(handle == NULL)
 		{
 			fprintf(stderr, "Could not open device %s\n",  error_buffer);
@@ -325,7 +287,7 @@ int main(int argc, char **argv)
 		error_help();
 	}
 
-
+	//  TCP filter - program zpracovava jen TCP pakety
 	struct bpf_program filter;
 	char filter_exp[] = "tcp";
 	bpf_u_int32 ip;
@@ -333,8 +295,8 @@ int main(int argc, char **argv)
 	pcap_compile(handle, &filter, filter_exp, 0, ip);
 	pcap_setfilter(handle, &filter);
 
-
-	pcap_loop(handle, 0, my_packet_handler, my_arguments);
+	// zpracovani paketu
+	pcap_loop(handle, 0, p_handler, my_arguments);
 
 	return 0;
 }
